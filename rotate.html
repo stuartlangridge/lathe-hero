@@ -1,0 +1,161 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    height: 100vh;
+    width: 100vw;
+}
+main {
+    width: 640px;
+    height: 960px;
+    box-shadow: 0 0 5px 5px black;
+    position: relative;
+}
+main img {
+    position: absolute;
+}
+body.loading main::after {
+    content: "loading images...";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+body main progress { display: none; }
+body.loading main progress {
+    display: block;
+    position: absolute;
+    top: 55%;
+    width: 80%;
+    left: 10%;
+    height: 20px;
+}
+</style>
+</head>
+<body>
+    <div>
+        <button id="step">step</button>
+        <button id="stop">stop</button>
+    </div>
+    <main>
+        <progress value=0 max=960></progress>
+    </main>
+<script>
+
+document.querySelector("button#step").onclick = () => { requestAnimationFrame(animate); };
+document.querySelector("button#stop").onclick = () => { STOP = true; };
+
+let leftEdge = 10000;
+let rightEdge = 0;
+let topEdge = 10000;
+let bottomEdge = 0;
+
+function startanimate() {
+    fetch("bboxes.json").then(resp => resp.json()).then(bboxes => {
+        let main = document.querySelector("main");
+        for (let i=0; i<60; i++) {
+            let im = new Image();
+            main.append(im);
+            displayed_images[i] = im;
+            let n = ((i * 8)+1).toString().padStart(4, "0");
+            let fn = `bark-slices-crushed-cropped/${n}.png`;
+            let [l, t, r, b] = bboxes[fn];
+            im.style.top = `${t}px`;
+            im.style.left = `${l}px`;
+            im.style.zIndex = 30 - (Math.abs(i - 30));
+            if (l < leftEdge) leftEdge = l;
+            if (r > rightEdge) rightEdge = r;
+            if (t < topEdge) topEdge = t;
+            if (b > bottomEdge) bottomEdge = b;
+        }
+        document.querySelector("body").classList.remove("loading");
+        requestAnimationFrame(animate);
+
+        console.log({topEdge, bottomEdge, leftEdge, rightEdge});
+        const logHeight = (bottomEdge - topEdge);
+        const logWidth = (rightEdge - leftEdge);
+        const logMid = logWidth / 2;
+        main.onmousemove = e => {
+            let bounds = main.getBoundingClientRect();
+            let x = e.clientX - bounds.left;
+            let y = e.clientY - bounds.top;
+            if (x > leftEdge && x < rightEdge && y > topEdge && y < bottomEdge) {
+                let slice = 60 - Math.floor(((y - topEdge) / logHeight) * 60);
+                let distanceFromCentre = Math.abs(logMid - (x - leftEdge));
+                let newWidth = Math.floor(30 * distanceFromCentre / logMid);
+                if (newWidth < widths[slice]) widths[slice] = newWidth;
+                //console.log("setting widths for", slice, "to", newWidth, y, topEdge, logHeight, y - topEdge, (y - topEdge / logHeight));
+            }
+        }
+
+    })
+}
+
+let lastTimestamp = 0;
+const FPS = 6;
+let STOP = false;
+const imageloaded = new Event('imageloaded');
+const progress = document.querySelector("progress");
+document.body.addEventListener('imageloaded', (e) => {
+    progress.value = progress.value + 1;
+}, false);
+
+function animate(timestamp) {
+    let diff = timestamp - lastTimestamp;
+    if (diff < 1000 / FPS) {
+        requestAnimationFrame(animate);
+        return;
+    }
+    lastTimestamp = timestamp;
+    Object.keys(displayed_images).forEach(imidx => {
+        let frameidx = imidx * 8 + tick;
+        if (widths[imidx] < 30) {
+            frameidx = 480 + (480 - frameidx);
+        }
+        displayed_images[imidx].style.transform = `scaleX(${100*widths[imidx]/30}%)`;
+        try {
+            displayed_images[imidx].src = imgs[frameidx].src;
+        } catch(e) {
+            console.log({e, imidx, frameidx});
+        }
+    })
+    tick += 1;
+    if (tick >= 8) tick = 0;
+    if (!STOP) requestAnimationFrame(animate);
+}
+
+document.querySelector("body").classList.add("loading");
+let tick = 0;
+let imgs = {};
+let displayed_images = {};
+let widths = []; for (let w=0; w<60; w++) { widths[w] = 30; }
+let loaders = [];
+for (let i=1; i<960; i++) {
+    loaders.push(new Promise((resolve, reject) => {
+        let imn = `bark-slices-crushed-cropped/${i.toString().padStart(4, "0")}.png`;
+        let im = new Image();
+        im.onload = () => {
+            document.body.dispatchEvent(imageloaded);
+            resolve([i, im]);
+        }
+        im.onerror = () => { reject(imn); }
+        im.src = imn;
+    }));
+}
+Promise.all(loaders).then(res => {
+    res.forEach(([idx, img]) => { imgs[idx] = img; });
+    startanimate();
+}).catch(failed_image => {
+    alert(`Couldn't load ${failed_image}`);
+});
+
+</script>
+</body>
+</html>
