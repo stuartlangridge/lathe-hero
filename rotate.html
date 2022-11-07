@@ -45,7 +45,7 @@ body.loading main progress {
         <button id="stop">stop</button>
     </div>
     <main>
-        <progress value=0 max=960></progress>
+        <progress value=0 max=0></progress>
     </main>
 <script>
 
@@ -57,7 +57,11 @@ let rightEdge = 0;
 let topEdge = 10000;
 let bottomEdge = 0;
 
-function startanimate() {
+const SLICES = 60;
+const ROTATIONS = 8;
+document.querySelector("progress").max = SLICES;
+
+function startanimate_old() {
     fetch("bboxes.json").then(resp => resp.json()).then(bboxes => {
         let main = document.querySelector("main");
         for (let i=0; i<60; i++) {
@@ -98,6 +102,54 @@ function startanimate() {
     })
 }
 
+function startanimate() {
+    const main = document.querySelector("main");
+    const iw = imgs[0].img.naturalWidth / ROTATIONS;
+    const ih = imgs[0].img.naturalHeight / 2;
+    fetch("bboxes.json").then(resp => resp.json()).then(bboxes => {
+        for (let i=0; i<SLICES; i++) {
+            const im = imgs[i].img;
+            main.append(im);
+            const bbox = bboxes[(i*ROTATIONS).toString()];
+            im.style.top = `${bbox.t}px`;
+            im.style.left = `${bbox.l}px`;
+            im.style.clipPath = `polygon(0px 0px, ${iw}px 0, ${iw}px ${ih}px, 0px ${ih}px`;
+            im.style.zIndex = (SLICES / 2) - (Math.abs(i - (SLICES / 2)));
+            imgs[i].x = 0;
+            imgs[i].xinc = iw;
+            imgs[i].yinc = ih;
+            imgs[i].scale = 1;
+            im.style.objectPosition = `0 -${ih}px`;
+        }
+        document.querySelector("body").classList.remove("loading");
+        requestAnimationFrame(animate);
+
+        const topEdge = bboxes[SLICES * ROTATIONS].t;
+        const leftEdge = bboxes[SLICES * ROTATIONS].l;
+        const bottomEdge = bboxes[0].t + ih;
+        const rightEdge = bboxes[0].l + iw;
+
+        console.log({topEdge, bottomEdge, leftEdge, rightEdge});
+        const logHeight = (bottomEdge - topEdge);
+        const logWidth = (rightEdge - leftEdge);
+        const logMid = logWidth / 2;
+        main.onmousemove = e => {
+            let bounds = main.getBoundingClientRect();
+            let x = e.clientX - bounds.left;
+            let y = e.clientY - bounds.top;
+            if (x > leftEdge && x < rightEdge && y > topEdge && y < bottomEdge) {
+                let slice = SLICES - Math.floor(((y - topEdge) / logHeight) * SLICES) - 1;
+                let distanceFromCentre = Math.abs(logMid - (x - leftEdge));
+                let newWidth = distanceFromCentre / logMid;
+                if (newWidth < imgs[slice].scale) imgs[slice].scale = newWidth;
+                // console.log("setting widths for", slice, "to", newWidth, y, topEdge, logHeight, y - topEdge, (y - topEdge / logHeight));
+            }
+        }
+
+    });
+}
+
+
 let lastTimestamp = 0;
 const FPS = 6;
 let STOP = false;
@@ -114,18 +166,15 @@ function animate(timestamp) {
         return;
     }
     lastTimestamp = timestamp;
-    Object.keys(displayed_images).forEach(imidx => {
-        let frameidx = imidx * 8 + tick;
-        if (widths[imidx] < 30) {
-            frameidx = 480 + (480 - frameidx);
-        }
-        displayed_images[imidx].style.transform = `scaleX(${100*widths[imidx]/30}%)`;
-        try {
-            displayed_images[imidx].src = imgs[frameidx].src;
-        } catch(e) {
-            console.log({e, imidx, frameidx});
-        }
-    })
+
+    Object.values(imgs).forEach(img => {
+        const oneIfWood = img.scale < 1 ? 1 : 0;
+        img.x += 1; if (img.x >= ROTATIONS) img.x = 0;
+        img.img.style.objectPosition = `-${img.x * img.xinc}px -${oneIfWood * img.yinc}px`;
+        img.img.style.transformOrigin = `${(img.xinc / 2)}px -${(img.yinc / 2)}px`;
+        img.img.style.transform = `scaleX(${img.scale})`;
+    });
+
     tick += 1;
     if (tick >= 8) tick = 0;
     if (!STOP) requestAnimationFrame(animate);
@@ -137,9 +186,9 @@ let imgs = {};
 let displayed_images = {};
 let widths = []; for (let w=0; w<60; w++) { widths[w] = 30; }
 let loaders = [];
-for (let i=1; i<60; i++) {
+for (let i=0; i<60; i++) {
     loaders.push(new Promise((resolve, reject) => {
-        let imn = `bark-slices-crushed-cropped-sheets-crushed/${i.toString().padStart(4, "0")}.png`;
+        let imn = `bark-slices-crushed-cropped-sheets-crushed/slice-${i.toString().padStart(4, "0")}.png`;
         let im = new Image();
         im.onload = () => {
             document.body.dispatchEvent(imageloaded);
@@ -150,7 +199,7 @@ for (let i=1; i<60; i++) {
     }));
 }
 Promise.all(loaders).then(res => {
-    res.forEach(([idx, img]) => { imgs[idx] = img; });
+    res.forEach(([idx, img]) => { imgs[idx] = {img: img}; });
     startanimate();
 }).catch(failed_image => {
     alert(`Couldn't load ${failed_image}`);

@@ -30,7 +30,7 @@ for ifn in sorted(glob.glob("bark-slices-crushed/*.png")):
     if w > maxw: maxw = w
 
 # Also fix 1-indexing to be 0-indexing
-
+bboxes = {}
 print("\n...now crop and 0-index")
 for ifn in sorted(glob.glob("bark-slices-crushed/*.png")):
     print(ifn, end="\r")
@@ -41,11 +41,15 @@ for ifn in sorted(glob.glob("bark-slices-crushed/*.png")):
     ofn = os.path.join("bark-slices-crushed-cropped", nfn)
     im = Image.open(ifn)
     bbox = im.getbbox()
+    bboxes[nval] = {"t": bbox[1], "l": bbox[0]}
     nim = im.crop(bbox)
     nim = nim.convert("RGBA")
     nnim = Image.new("RGBA", (maxw, maxh))
     x = int((maxw - nim.size[0]) / 2)
     nnim.alpha_composite(nim, (x, 0))
     nnim.save(ofn)
+
+with open("bboxes.json", mode="w") as fp:
+    json.dump(bboxes, fp, indent=2)
 
 print("\n...cropped.")
