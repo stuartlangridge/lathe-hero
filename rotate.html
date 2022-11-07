@@ -137,9 +137,9 @@ let imgs = {};
 let displayed_images = {};
 let widths = []; for (let w=0; w<60; w++) { widths[w] = 30; }
 let loaders = [];
-for (let i=1; i<960; i++) {
+for (let i=1; i<60; i++) {
     loaders.push(new Promise((resolve, reject) => {
-        let imn = `bark-slices-crushed-cropped/${i.toString().padStart(4, "0")}.png`;
+        let imn = `bark-slices-crushed-cropped-sheets-crushed/${i.toString().padStart(4, "0")}.png`;
         let im = new Image();
         im.onload = () => {
             document.body.dispatchEvent(imageloaded);

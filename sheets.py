@@ -27,10 +27,10 @@ for slice in range(SLICES):
                 sheet = Image.new("RGBA", (8 * im.size[0], 2*im.size[1]))
             pos = (xi * im.size[0], y)
             sheet.alpha_composite(im, pos)
-            print(f"{ifn} @ {pos}")
+            print(f"{ifn} @ {pos}", end="\r")
             yadd = im.size[1]
         except FileNotFoundError:
-            print("failed", ifn)
+            print(f"failed {ifn}")
 
     for xi in range(FRAMES_PER_SLICE):
         flip_slice = SLICES - 1 - slice
@@ -41,7 +41,9 @@ for slice in range(SLICES):
             im = im.convert("RGBA")
             pos = (xi * im.size[0], yadd)
             sheet.alpha_composite(im, pos)
-            print(f"{ifn} @ {pos}")
+            print(f"{ifn} @ {pos}", end="\r")
         except FileNotFoundError:
-            print("failed", ifn)
+            print(f"failed {ifn}")
     sheet.save(f"bark-slices-crushed-cropped-sheets/{slice:04d}.png")
+    print(f"Sheet done for slice {slice}                                                     ", end="\r")
+print("\n...sheets done.")
